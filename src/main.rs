@@ -9,6 +9,7 @@ mod dns;
 mod ethernet;
 mod icmpv6;
 mod ipv6;
+mod tcp;
 mod udp;
 
 const PROTOCOL_NUMBER_TCP: u8 = 6;
@@ -55,7 +56,58 @@ fn main() {
 
             match ipv6.next_header {
                 PROTOCOL_NUMBER_TCP => {
-                    println!("tcp");
+                    let tcp = tcp::Tcp::parse(ipv6.payload);
+                    if tcp.destination_port == 80
+                        && (tcp.synchronize || tcp.push_function || tcp.fin)
+                    {
+                        println!("tcp acknowledgment");
+                        let payload = if tcp.push_function {
+                            "HTTP/1.1 200 OK\r\nContent-Length: 13\r\nConnection: close\r\n\r\nHello, world!".as_bytes().to_owned()
+                        } else {
+                            vec![]
+                        };
+                        let tcp_payload = tcp::Tcp {
+                            source_port: 80,
+                            destination_port: tcp.source_port,
+                            sequence_number: tcp.acknowledgment_number,
+                            acknowledgment_number: tcp.sequence_number
+                                + std::cmp::max(tcp.payload.len() as u32, 1),
+                            data_offset: 0,
+                            urgent_pointer_is_significant: false,
+                            acknowledgment: true,
+                            push_function: payload.len() != 0,
+                            reset: false,
+                            synchronize: tcp.synchronize,
+                            fin: false,
+                            window: 64800,
+                            checksum: 0,
+                            urgent_pointer: 0,
+                            payload: &payload,
+                        }
+                        .to_bytes(&ip_addr, &ipv6.source_address);
+
+                        let ipv6_payload = ipv6::Ipv6 {
+                            flags: 0x60000000,
+                            next_header: PROTOCOL_NUMBER_TCP,
+                            hop_limit: 255,
+                            source_address: ip_addr,
+                            destination_address: ipv6.source_address,
+                            payload: &tcp_payload,
+                        }
+                        .to_bytes();
+
+                        let packet = ethernet::EthernetFrame {
+                            destination_mac: ethernet_frame.source_mac,
+                            source_mac: mac_address,
+                            ether_type: ethernet::EtherType::Ipv6,
+                            payload: &ipv6_payload,
+                            crc: 0xdeadbeef,
+                        }
+                        .to_bytes();
+
+                        eem_class.write(&packet);
+                    }
+                    println!("tcp {:?}", tcp);
                 }
                 PROTOCOL_NUMBER_UDP => {
                     let udp = udp::Udp::parse(ipv6.payload);
@@ -74,7 +126,6 @@ fn main() {
                                     0x07, 0x6c, 0x69, 0x63, 0x6f, 0x72, 0x6e, 0x65, 0x05, 0x6c,
                                     0x6f, 0x63, 0x61, 0x6c, 0x00,
                                 ];
-
 
                                 let resource = match question.qtype {
                                     12 => dns::Resource {

@@ -141,7 +141,7 @@ pub fn parse(buffer: &[u8]) -> ParsedDns<'_> {
     let mut questions_len = 0;
     for _ in 0..qd_count {
         questions_len = Question::len(&questions_start[questions_len..]);
-        break
+        break;
     }
     let questions = Questions(&questions_start[0..questions_len]);
 
@@ -193,7 +193,10 @@ pub fn to_bytes(header: Header, answers: &[Resource]) -> Vec<u8> {
 mod tests {
     #[test]
     fn test_parse() {
-        let buffer = [0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 7, 108, 105, 99, 111, 114, 110, 101, 5, 108, 111, 99, 97, 108, 0, 0, 1, 0, 1, 192, 12, 0, 28, 0, 1];
+        let buffer = [
+            0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 7, 108, 105, 99, 111, 114, 110, 101, 5, 108, 111,
+            99, 97, 108, 0, 0, 1, 0, 1, 192, 12, 0, 28, 0, 1,
+        ];
         let result = super::parse(&buffer);
         println!("{:?}", result);
     }
